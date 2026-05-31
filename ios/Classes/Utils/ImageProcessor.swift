@@ -194,48 +194,34 @@ class ImageProcessor {
     
     /// Standard conversion (faster but uses more memory)
     private static func convertToMonochromeStandard(cgImage: CGImage, width: Int, height: Int, threshold: Int = 128) -> [[Bool]]? {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerRow = width * 4
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+
         guard let context = CGContext(
             data: nil,
             width: width,
             height: height,
             bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
         ) else {
             return nil
         }
-        
+
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        
+
         guard let pixelData = context.data else {
             return nil
         }
-        
-        var bitmap: [[Bool]] = []
-        bitmap.reserveCapacity(height)
-        
-        for y in 0..<height {
-            var row: [Bool] = []
-            row.reserveCapacity(width)
-            
-            for x in 0..<width {
-                let offset = (y * width + x) * 4
-                let r = pixelData.load(fromByteOffset: offset, as: UInt8.self)
-                let g = pixelData.load(fromByteOffset: offset + 1, as: UInt8.self)
-                let b = pixelData.load(fromByteOffset: offset + 2, as: UInt8.self)
-                
-                // Convert to grayscale using luminance formula
-                let gray = Int(Double(r) * 0.299 + Double(g) * 0.587 + Double(b) * 0.114)
-                // Use threshold: true = black pixel, false = white pixel
-                // Higher threshold means more pixels become white (less black)
-                row.append(gray < threshold)
-            }
-            
-            bitmap.append(row)
-        }
-        
-        return bitmap
+
+        return processChunkPixels(
+            pixelData: pixelData,
+            width: width,
+            chunkSize: height,
+            threshold: threshold
+        )
     }
     
     /// Memory-efficient conversion (processes in chunks)
